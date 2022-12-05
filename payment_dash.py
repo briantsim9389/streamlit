@@ -1,14 +1,17 @@
 import streamlit as st
+from st_aggrid import AgGrid
+from st_aggrid.shared import JsCode
+from st_aggrid.grid_options_builder import GridOptionsBuilder
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
+from datetime import date
 
 
 
 #this is the header
 
-st.set_page_config(page_title='Payment Detail Report',  layout='wide', page_icon=':ambulance:')
+st.set_page_config(page_title='Payment Detail Report',  layout='wide', page_icon=':moneybag:')
 
 st.title("Project Knight - Payment Detail Report")
 st.markdown("Last Update Date: 2022-11-29")
@@ -25,8 +28,8 @@ with st.spinner('Updating Report...'):
 
     #Format datetime to date
     pay_df['snapshot_createdate'] = pd.to_datetime(pay_df['snapshot_createdate']).dt.date
-    pay_df['c_actdate'] = pd.to_datetime(pay_df['c_actdate']).dt.date
-    pay_df['c_expdate'] = pd.to_datetime(pay_df['c_expdate']).dt.date
+    pay_df['c_actdate'] = pd.to_datetime(pay_df['c_actdate']).dt.strftime('%Y-%m-%d')
+    pay_df['c_expdate'] = pd.to_datetime(pay_df['c_expdate']).dt.strftime('%Y-%m-%d')
 
     exp_df = pay_df['snapshot_createdate'].sort_values(ascending=False).unique().tolist()
     print(exp_df)
@@ -110,40 +113,60 @@ with st.spinner('Updating Report...'):
     today_df['amount'] = today_df['amount'].apply(lambda x: "${:.1f}k".format((x/1000)))
     today_df['cheque_amount'] = today_df['cheque_amount'].apply(lambda x: "${:.1f}k".format((x/1000)))
 
-    colourcode = []
-    for index,row in today_df.iterrows(): 
-        status = row['status']
-        if status == 'NEW':
-            colourcode.append('paleturquoise')
-        elif status == 'OLD':
-            colourcode.append('lightgrey')
-        elif status == 'UPDATE':
-            colourcode.append('#ED553B')
-        else:
-            colourcode.append('#FFFFFF')
-    
+    st.subheader("Payment Comparisons: "+str(sel_date)+" / "+str(yes_date))
+    cellsytle_jscode = JsCode(
+        """
+        function(params) {
+            if (params.data.status == 'NEW') {
+                return {
+                    'color': 'black',
+                    'backgroundColor': 'paleturquoise'
+                }
+            } else if (params.data.status == 'OLD') {
+                return {
+                    'color': 'black',
+                    'backgroundColor': 'lightgrey'
+                }
+            } else if (params.data.status == 'UPDATE') {
+                return {
+                    'color': 'black',
+                    'backgroundColor': '#ED553B'
+                }
+            } else {
+                return {
+                    'color': 'black',
+                    'backgroundColor': '#FFFFFF'
+                }
+            }
+        };
+        """
+    )
+    #['Loan No','Ref No.','Exp Date','Term','Amount','Item','Remark','Act Date','Cleared','Number','Bank','Cheque Amount','Cheque Remark','Status']
+    gb = GridOptionsBuilder.from_dataframe(today_df)
+    gb.configure_columns(
+        (
+            "loanid"
+            ,"refno"
+            ,"c_expdate"
+            ,"term"
+            ,"amount"
+            ,"item"
+            ,"remark"
+            ,"c_actdate"
+            ,"cleared"
+            ,"number"
+            ,"bank"
+            ,"cheque_amount"
+            ,"cheque_remark"
+            ,"status"
+        ),
+        cellStyle=cellsytle_jscode,
+    )
+    gb.configure_pagination()
+    gb.configure_columns(("account_name", "symbol"), pinned=True)
+    gridOptions = gb.build()
 
-    table = go.Figure(data=[go.Table(
-        columnorder = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], columnwidth = [10,14,10,10,10,10,20,10,10,10,10,10,10,10,10],
-        header=dict(
-                    values = ['Loan No','Ref No.','Exp Date','Term','Amount','Item','Remark','Act Date','Cleared','Number','Bank','Cheque Amount','Cheque Remark','Status'],
-                 font=dict(size=13, color = 'white'),
-                 fill_color = '#264653',
-                 align = 'center',
-                 height=30
-                    ),
-        cells=dict(
-            values = [today_df[K].tolist() for K in today_df.columns], 
-                  font=dict(size=13),
-                  align = 'left',
-                  fill_color = [colourcode],
-                  line_color = 'rgba(255,255,255,0.2)',
-                  height=24)
-                )
-    ])
-
-    table.update_layout(title_text="Payment Comparisons: "+str(sel_date)+" / "+str(yes_date),title_font_color = '#264653',title_x=0,margin= dict(l=0,r=10,b=10,t=30), height=600)    
-    st.plotly_chart(table,use_container_width=True)
+    AgGrid(today_df, gridOptions=gridOptions, allow_unsafe_jscode=True,fit_columns_on_grid_load=True,height=600)
 
     @st.experimental_memo
     def convert_df(df):
