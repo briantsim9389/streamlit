@@ -1,5 +1,5 @@
 import streamlit as st
-from st_aggrid import AgGrid
+from st_aggrid import AgGrid,ColumnsAutoSizeMode
 from st_aggrid.shared import JsCode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 import pandas as pd
@@ -28,8 +28,10 @@ with st.spinner('Updating Report...'):
 
     #Format datetime to date
     pay_df['snapshot_createdate'] = pd.to_datetime(pay_df['snapshot_createdate']).dt.date
-    pay_df['c_actdate'] = pd.to_datetime(pay_df['c_actdate']).dt.strftime('%Y-%m-%d')
-    pay_df['c_expdate'] = pd.to_datetime(pay_df['c_expdate']).dt.strftime('%Y-%m-%d')
+    pay_df['actdate'] = pd.to_datetime(pay_df['actdate']).dt.strftime('%Y-%m-%d')
+    pay_df['expdate'] = pd.to_datetime(pay_df['expdate']).dt.strftime('%Y-%m-%d')
+    pay_df['mts'] = pd.to_datetime(pay_df['mts']).dt.strftime('%Y-%m-%d')
+    pay_df['cts'] = pd.to_datetime(pay_df['cts']).dt.strftime('%Y-%m-%d')
 
     exp_df = pay_df['snapshot_createdate'].sort_values(ascending=False).unique().tolist()
     print(exp_df)
@@ -55,7 +57,7 @@ with st.spinner('Updating Report...'):
 
     g1, g2 = st.columns((1,1))
 
-    last_py_date_count_df = pay_df.groupby(['c_actdate'],as_index=False).size().groupby(level=0).max().sort_values(by=['c_actdate'],ascending=False).head(10)
+    last_py_date_count_df = pay_df.groupby(['actdate'],as_index=False).size().groupby(level=0).max().sort_values(by=['actdate'],ascending=False).head(10)
     #last_py_date_count_df['day'] = pd.to_datetime(pay_df['c_actdate']).dt.month
     last_py_date_count_df = last_py_date_count_df.set_axis(['Active Date','Count'], axis=1, inplace=False)
     print(last_py_date_count_df)
@@ -65,7 +67,7 @@ with st.spinner('Updating Report...'):
     
     g1.plotly_chart(fig, use_container_width=True) 
 
-    last_py_date_amt_df = pay_df.groupby(['c_actdate'],as_index=False)['amount'].sum().groupby(level=0).max().sort_values(by=['c_actdate'],ascending=False).head(10)
+    last_py_date_amt_df = pay_df.groupby(['actdate'],as_index=False)['amount'].sum().groupby(level=0).max().sort_values(by=['actdate'],ascending=False).head(10)
     #last_py_date_amt_df['amount'] = last_py_date_amt_df['amount'].apply(lambda x: "${:.1f}k".format((x/1000)))    
     #last_py_date_amt_df['amount'] = last_py_date_amt_df["amount"].map('{:.2f}'.format)
     last_py_date_amt_df = last_py_date_amt_df.set_axis(['Active Date','Amount'],axis=1, inplace = False)
@@ -97,45 +99,41 @@ with st.spinner('Updating Report...'):
     today_df.update(filter2)
 
     filter3 = yes_df[yes_df.gidpy.isin(today_df.gidpy)]
-    filter3.drop(['snapshot_key', 'snapshot_createdate'], axis=1)
-    filter3 = filter3.drop(['snapshot_key', 'snapshot_createdate'], axis=1)
+    filter3 = filter3.drop(['snapshot_key', 'snapshot_createdate','updatedby','createdby'], axis=1)
 
     filter4 = today_df[today_df.gidpy.isin(yes_df.gidpy)]
-    filter4 = filter4.drop(['snapshot_key', 'snapshot_createdate'], axis=1)
-
-    comparion = filter3.reset_index(drop=True).compare(filter4.reset_index(drop=True))
+    filter4 = filter4.drop(['snapshot_key', 'snapshot_createdate','updatedby','createdby'], axis=1)
+    comparion = filter3.reset_index(drop=True)==filter4.reset_index(drop=True)
 
     #The records are find in today's and yesterday's but values not match
     filter5 = today_df.iloc[comparion.index]
+    filter5 = filter5[filter5['status'] != 'NEW']
     filter5['status'] = 'UPDATE'
     today_df.update(filter5)
-    today_df = today_df.drop(['snapshot_key', 'snapshot_createdate','gidpy','gidcq','actdate','expdate'], axis=1)
+    today_df = today_df.drop(['snapshot_key', 'snapshot_createdate','gidpy','gidcq','updatedby','createdby'], axis=1)
     today_df['amount'] = today_df['amount'].apply(lambda x: "${:.1f}k".format((x/1000)))
     today_df['cheque_amount'] = today_df['cheque_amount'].apply(lambda x: "${:.1f}k".format((x/1000)))
 
-    st.subheader("Payment Comparisons: "+str(sel_date)+" / "+str(yes_date))
+    st.subheader("Payment Comparisons: "+str(sel_date)+" / "+str(yes_date).split(' ')[0])
     cellsytle_jscode = JsCode(
         """
         function(params) {
             if (params.data.status == 'NEW') {
                 return {
-                    'color': 'black',
-                    'backgroundColor': 'paleturquoise'
+                    'color': '#28a745',
                 }
             } else if (params.data.status == 'OLD') {
                 return {
-                    'color': 'black',
-                    'backgroundColor': 'lightgrey'
+                    'color': '#ffc107',
                 }
             } else if (params.data.status == 'UPDATE') {
                 return {
-                    'color': 'black',
-                    'backgroundColor': '#ED553B'
+                    'color': '#007bff',
+
                 }
             } else {
                 return {
-                    'color': 'black',
-                    'backgroundColor': '#FFFFFF'
+                    'color': 'black',                    
                 }
             }
         };
@@ -147,17 +145,19 @@ with st.spinner('Updating Report...'):
         (
             "loanid"
             ,"refno"
-            ,"c_expdate"
+            ,"expdate"
             ,"term"
             ,"amount"
             ,"item"
             ,"remark"
-            ,"c_actdate"
+            ,"actdate"
             ,"cleared"
             ,"number"
             ,"bank"
             ,"cheque_amount"
             ,"cheque_remark"
+            ,"mts"
+            ,"cts"
             ,"status"
         ),
         cellStyle=cellsytle_jscode,
@@ -166,7 +166,7 @@ with st.spinner('Updating Report...'):
     gb.configure_columns(("account_name", "symbol"), pinned=True)
     gridOptions = gb.build()
 
-    AgGrid(today_df, gridOptions=gridOptions, allow_unsafe_jscode=True,fit_columns_on_grid_load=True,height=600)
+    AgGrid(today_df, gridOptions=gridOptions, allow_unsafe_jscode=True,height=1200,columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS)
 
     @st.experimental_memo
     def convert_df(df):
