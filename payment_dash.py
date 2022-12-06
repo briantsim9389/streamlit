@@ -7,31 +7,31 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-
-
 #this is the header
-
 st.set_page_config(page_title='Payment Detail Report',  layout='wide', page_icon=':moneybag:')
 
 st.title("Project Knight - Payment Detail Report")
 st.markdown("Last Update Date: 2022-11-29")
 
+@st.cache
+def load_data():
+    data = pd.read_excel('source/pl_paymenet_date_snapshot_.xlsx',sheet_name = 'Sheet1')    
+    lowercase = lambda x: str(x).lower()
+    data.rename(lowercase, axis='columns', inplace=True)
+    #Format datetime to date
+    data['snapshot_createdate'] = pd.to_datetime(data['snapshot_createdate']).dt.date
+    data['actdate'] = pd.to_datetime(data['actdate']).dt.strftime('%Y-%m-%d')
+    data['expdate'] = pd.to_datetime(data['expdate']).dt.strftime('%Y-%m-%d')
+    data['mts'] = pd.to_datetime(data['mts']).dt.strftime('%Y-%m-%d')
+    data['cts'] = pd.to_datetime(data['cts']).dt.strftime('%Y-%m-%d')
+    return data
 
 ## Data
 
 with st.spinner('Updating Report...'):
     #Metrics setting and rendering
 
-    lowercase = lambda x: str(x).lower()
-    pay_df = pd.read_excel('source/pl_paymenet_date_snapshot_.xlsx',sheet_name = 'Sheet1')    
-    pay_df.rename(lowercase, axis='columns', inplace=True)
-
-    #Format datetime to date
-    pay_df['snapshot_createdate'] = pd.to_datetime(pay_df['snapshot_createdate']).dt.date
-    pay_df['actdate'] = pd.to_datetime(pay_df['actdate']).dt.strftime('%Y-%m-%d')
-    pay_df['expdate'] = pd.to_datetime(pay_df['expdate']).dt.strftime('%Y-%m-%d')
-    pay_df['mts'] = pd.to_datetime(pay_df['mts']).dt.strftime('%Y-%m-%d')
-    pay_df['cts'] = pd.to_datetime(pay_df['cts']).dt.strftime('%Y-%m-%d')
+    pay_df = load_data()
 
     exp_df = pay_df['snapshot_createdate'].sort_values(ascending=False).unique().tolist()
     print(exp_df)
@@ -171,7 +171,6 @@ with st.spinner('Updating Report...'):
     @st.experimental_memo
     def convert_df(df):
         return df.to_csv(index=False).encode('utf-8')
-
 
     csv = convert_df(today_df)
 
